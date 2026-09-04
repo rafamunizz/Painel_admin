@@ -123,7 +123,24 @@
 }
 .coverage-total-row{font-weight:800;background:#f1f2f4;border-top:2px solid #242830}.coverage-total-row td{font-weight:800}.coverage-total-row .responded{color:#27794a}.coverage-total-row .pending{color:#a62b2b}
 
-/* ============================================================
+  .timeline-cell{font-weight:800;text-align:center;white-space:nowrap}
+  .timeline-cell.draft{color:#9a6900}.timeline-cell.done{color:#27794a}.timeline-cell.print{color:#315f9e}
+  .participation-cell{font-weight:900;white-space:nowrap}
+  .participation-cell.high{color:#27794a}.participation-cell.mid{color:#9a6900}.participation-cell.low{color:#a62b2b}
+  .timeline-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)}
+  .timeline-legend span{display:inline-flex;align-items:center;gap:5px}
+  .timeline-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .timeline-dot.draft{background:#f1c75b}.timeline-dot.done{background:#4A4E58}.timeline-dot.print{background:#315f9e}
+  .status-flow{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .status-flow .step{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800}
+  .status-flow .step.off{background:#f1f2f4;color:#a5a8ad}
+  .status-flow .step.on.draft{background:#fff4d7;color:#9a6900}
+  .status-flow .step.on.done{background:#e7f5ec;color:#27794a}
+  .status-flow .step.on.print{background:#eaf1fb;color:#315f9e}
+  .status-arrow{color:#b0b3b8;font-size:10px}
+  .dynamic-report{margin-top:14px}.dynamic-toolbar{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end}.dynamic-toolbar .field{min-width:180px}.dynamic-help{font-size:10px;color:var(--muted);margin-top:8px}.dynamic-table{width:100%;border-collapse:collapse;min-width:760px}.dynamic-table th{background:#050505;color:#fff;font-size:10px;text-align:center;padding:10px 8px;position:sticky;top:0;z-index:1}.dynamic-table th:first-child{text-align:left}.dynamic-table td{padding:9px 8px;border-bottom:1px solid #ecebea;font-size:10.5px;text-align:center}.dynamic-table td:first-child{text-align:left;font-weight:800;color:#222}.dynamic-table tbody tr:nth-child(even){background:#f4f5f6}.dynamic-table tbody tr:hover{background:#e9edf2}.matrix-cell{font-weight:900}.matrix-cell.yes{color:var(--good)}.matrix-cell.no{color:#9da1a8}.matrix-total{background:#f1f2f4!important;font-weight:900;border-top:2px solid #242830}.dynamic-empty{padding:28px;text-align:center;color:var(--muted)}
+  @media(max-width:900px){.dynamic-toolbar{grid-template-columns:1fr 1fr}.dynamic-toolbar .dynamic-actions{grid-column:1/-1}}
+  /* ============================================================
    FUNDO ANIMADO — REDE DE PARTÍCULAS INTERATIVA
    ============================================================ */
 /* Partículas: somente como detalhe visual, sem alterar as cores do HTML */
@@ -157,6 +174,7 @@ const DAYS=['SEGUNDA-FEIRA','TERÇA-FEIRA','QUARTA-FEIRA','QUINTA-FEIRA','SEXTA-
 
 let logs=[], latest={}, tab='overview', storeFilter='', deptFilter='', statusFilter='', search='', loadedAt=null, analyticsStore='', analyticsWeek='';
 let coverageSort={key:'coverage',dir:'desc'}, coverageStoreSort={key:'cod',dir:'asc'};
+  let matrixRow='loja', matrixCol='status', matrixValue='quantidade';
 const $=id=>document.getElementById(id);
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function payload(log){let p=log&&log.payload;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){p={}}}return p||{}}
@@ -179,6 +197,25 @@ function printInfo(log){
   const found=logs.filter(x=>storeKey(x)===key && week(x)===wk && dayKey(x)===day && triggerOf(x)==='impressao')
     .sort((a,b)=>new Date(b.created_at||saved(b))-new Date(a.created_at||saved(a)));
   return {printed:found.length>0, log:found[0]||null};
+}
+function weekPrintInfo(log){
+  const key=storeKey(log), wk=week(log);
+  const found=logs.filter(x=>storeKey(x)===key && week(x)===wk && triggerOf(x)==='impressao')
+    .sort((a,b)=>new Date(b.created_at||saved(b))-new Date(a.created_at||saved(a)));
+  return {printed:found.length>0, log:found[0]||null};
+}
+function hasFullWeekSchedule(log){
+  if(!log)return false;
+  const sched=schedule(log)||{};
+  return DAYS.every(d=>Object.values(sched[d]||{}).some(en=>en && en.escalar==='SIM'));
+}
+function isScaleConcluded(log){
+  return !!log && hasFullWeekSchedule(log) && weekPrintInfo(log).printed;
+}
+function scaleStatus(log){
+  if(isScaleConcluded(log))return 'Concluído';
+  if(log)return 'Rascunho';
+  return 'Não concluído';
 }
 function printBadge(log){
   const p=printInfo(log);
@@ -391,14 +428,17 @@ function analytics(){
     const mult=dir==='asc'?1:-1;
     const value=(r,k)=>{
       if(k==='coverage')return coverageRate(r);
-      if(k==='status')return r.responded?'Respondeu':'Não respondeu';
+      if(k==='draft')return r.draft?1:0;
+      if(k==='concluded')return r.concluded?1:0;
+      if(k==='printed')return r.printed?1:0;
+      if(k==='status')return r.concluded?'Concluído':r.draft?'Rascunho':'Não concluído';
       if(k==='days')return scaledDays(r.log).join(', ');
       if(k==='saved')return r.responded?(saved(r.log)||''):'';
       return r[k];
     };
     return rows.slice().sort((a,b)=>{
       let av=value(a,key), bv=value(b,key);
-      if(key==='cod'||key==='responded'||key==='pending'||key==='total'||key==='coverage'){
+      if(key==='cod'||key==='responded'||key==='pending'||key==='total'||key==='coverage'||key==='draft'||key==='concluded'||key==='printed'){
         av=Number(av)||0;bv=Number(bv)||0;
         return (av-bv)*mult;
       }
@@ -476,20 +516,33 @@ function analytics(){
   function coverageRegionalRows(){
     const rows=coverageRows(), map={};
     rows.forEach(r=>{
-      if(!map[r.regional])map[r.regional]={regional:r.regional,ggl:r.ggl,total:0,responded:0,pending:0,rows:[]};
-      const x=map[r.regional]; x.ggl=String(r.ggl||''); x.regional=String(r.regional||''); x.total++; if(r.responded)x.responded++;else x.pending++; x.rows.push(r);
+      const isDone=isScaleConcluded(r.log);
+      const isDraft=!!r.log && !isDone;
+      const isPrinted=!!r.log && weekPrintInfo(r.log).printed;
+      r.draft=isDraft; r.concluded=isDone; r.printed=isPrinted;
+      if(!map[r.regional])map[r.regional]={regional:r.regional,ggl:r.ggl,total:0,draft:0,concluded:0,printed:0,pending:0,rows:[]};
+      const x=map[r.regional]; x.ggl=String(r.ggl||''); x.regional=String(r.regional||''); x.total++;
+      if(isDraft)x.draft++; if(isDone)x.concluded++; if(isPrinted)x.printed++; if(!isDone)x.pending++; x.rows.push(r);
     });
     return Object.values(map).sort((a,b)=>a.regional.localeCompare(b.regional,'pt-BR'));
   }
-  function coverageRate(x){return x.total?Math.round(x.responded/x.total*1000)/10:0}
+  function coverageRate(x){return x.total?Math.round(x.concluded/x.total*1000)/10:0}
   function rateClass(v){return v>=90?'high':v>=70?'mid':'low'}
-  function coverageStatusLabel(x){return x.pending===0?'Regional concluída':x.responded===0?'Nenhuma resposta':'Acompanhamento necessário'}
-  function coverageStatusClass(x){return x.pending===0?'ok':x.responded===0?'red':'warn'}
+  function coverageStatusLabel(x){return x.pending===0?'Regional concluída':x.concluded===0?'Nenhuma concluída':'Acompanhamento necessário'}
+  function coverageStatusClass(x){return x.pending===0?'ok':x.concluded===0?'red':'warn'}
+  function coverageStatusMatch(r){
+    if(!coverageStatus)return true;
+    if(coverageStatus==='draft')return !!r.draft;
+    if(coverageStatus==='concluded')return !!r.concluded;
+    if(coverageStatus==='printed')return !!r.printed;
+    if(coverageStatus==='not_concluded')return !r.concluded;
+    return true;
+  }
   function filteredCoverageRegionalRows(){
     const q=normText(coverageSearch);
     return coverageRegionalRows().filter(x=>!coverageRegional || x.regional===coverageRegional).map(x=>{
       const rows=x.rows.filter(r=>{
-        const okStatus=!coverageStatus||(coverageStatus==='responded'?r.responded:!r.responded);
+        const okStatus=coverageStatusMatch(r);
         const okSearch=!q||normText(r.loja+' '+r.cod+' '+r.regional+' '+r.ggl).includes(q);
         return okStatus&&okSearch;
       });
@@ -498,117 +551,123 @@ function analytics(){
   }
 
   function coverage(){
-    const all=coverageRows();
-    const allRegions=coverageRegionalRows();
-    const visible=filteredCoverageRegionalRows();
-
+    const all=coverageRows(), allRegions=coverageRegionalRows(), visible=filteredCoverageRegionalRows();
     const total=visible.reduce((a,x)=>a+x.rows.length,0);
-    const responded=visible.reduce((a,x)=>a+x.rows.filter(r=>r.responded).length,0);
-    const pending=total-responded;
-    const rate=total?Math.round(responded/total*1000)/10:0;
-
+    const draft=visible.reduce((a,x)=>a+x.rows.filter(r=>r.draft).length,0);
+    const concluded=visible.reduce((a,x)=>a+x.rows.filter(r=>r.concluded).length,0);
+    const printed=visible.reduce((a,x)=>a+x.rows.filter(r=>r.printed).length,0);
+    const rate=total?Math.round(concluded/total*1000)/10:0;
     const regionalOptions=allRegions.map(x=>'<option value="'+esc(x.regional)+'" '+(coverageRegional===x.regional?'selected':'')+'>'+esc(x.regional)+'</option>').join('');
-
     const regionFiltered=visible.map(x=>{
-      const sourceRows=x.rows;
-      const totalR=sourceRows.length;
-      const respondedR=sourceRows.filter(r=>r.responded).length;
-      const pendingR=totalR-respondedR;
-      return {...x,total:totalR,responded:respondedR,pending:pendingR,rows:sourceRows};
+      const rows=x.rows;
+      return {...x,total:rows.length,draft:rows.filter(r=>r.draft).length,concluded:rows.filter(r=>r.concluded).length,printed:rows.filter(r=>r.printed).length,pending:rows.filter(r=>!r.concluded).length,rows};
     });
     const sortedRegions=sortRows(regionFiltered,coverageSort.key,coverageSort.dir);
-
     const summaryRows=sortedRegions.map(x=>{
-      const key='reg_'+x.regional, isOpen=coverageOpen.has(key);
-      const vr=coverageRate(x);
-      const statusText=x.pending===0?'Regional concluída':x.responded===0?'Nenhuma resposta':'Acompanhamento necessário';
-      const cls=x.pending===0?'ok':x.responded===0?'red':'warn';
+      const isOpen=coverageOpen.has('reg_'+x.regional), vr=coverageRate(x);
       let detail='';
       if(isOpen){
         const sortedStores=sortRows(x.rows,coverageStoreSort.key,coverageStoreSort.dir);
         detail='<tr class="coverage-detail-row"><td colspan="7"><div class="coverage-detail">'+
-          '<div class="coverage-detail-head"><strong>'+esc(x.regional)+' · '+x.responded+' responderam / '+x.pending+' pendentes</strong><span>1 = respondeu · 0 = não respondeu</span></div>'+
-          '<div class="table-wrap"><table class="store-mini-table"><thead><tr>'+
-          '<th data-store-sort="cod">COD '+sortHeader('','cod',coverageStoreSort)+'</th>'+
-          '<th data-store-sort="loja">LOJA '+sortHeader('','loja',coverageStoreSort)+'</th>'+
-          '<th data-store-sort="responded">1 / 0 '+sortHeader('','responded',coverageStoreSort)+'</th>'+
-          '<th data-store-sort="status">STATUS '+sortHeader('','status',coverageStoreSort)+'</th>'+
-          '<th data-store-sort="days">DIAS ESCALADOS '+sortHeader('','days',coverageStoreSort)+'</th>'+
-          '<th data-store-sort="saved">ÚLTIMA RESPOSTA '+sortHeader('','saved',coverageStoreSort)+'</th>'+
-          '</tr></thead><tbody>'+
+          '<div class="coverage-detail-head"><strong>'+esc(x.regional)+' · '+x.concluded+' concluídas / '+x.pending+' não concluídas</strong><span>Rascunho → Concluído → Impresso</span></div>'+
+          '<div class="table-wrap"><table class="store-mini-table"><thead><tr><th>COD</th><th>LOJA</th><th>LINHA DO TEMPO</th><th>STATUS</th><th>DIAS ESCALADOS</th><th>ÚLTIMA ATUALIZAÇÃO</th></tr></thead><tbody>'+
           sortedStores.map(r=>{
             const days=scaledDays(r.log);
-            return '<tr><td class="mono">'+esc(r.cod)+'</td><td><strong>'+esc(r.loja)+'</strong></td><td class="bit">'+(r.responded?'1':'0')+'</td><td><span class="response-badge '+(r.responded?'yes':'no')+'">'+(r.responded?'● Respondeu':'● Não respondeu')+'</span></td><td>'+(days.length?days.map(d=>'<span class="days-pill">'+esc(d)+'</span>').join(' '):'<span class="days-empty">—</span>')+'</td><td>'+esc(r.responded?date(saved(r.log)):'—')+'</td></tr>';
-          }).join('')+
-          '</tbody></table></div></div></td></tr>';
+            const flow='<div class="status-flow"><span class="step '+(r.draft?'on draft':'off')+'">● Rascunho</span><span class="status-arrow">→</span><span class="step '+(r.concluded?'on done':'off')+'">● Concluído</span><span class="status-arrow">→</span><span class="step '+(r.printed?'on print':'off')+'">● Impresso</span></div>';
+            return '<tr><td class="mono">'+esc(r.cod)+'</td><td><strong>'+esc(r.loja)+'</strong></td><td>'+flow+'</td><td><span class="response-badge '+(r.concluded?'yes':'no')+'">'+(r.concluded?'● Concluído':'● Não concluído')+'</span></td><td>'+(days.length?days.map(d=>'<span class="days-pill">'+esc(d)+'</span>').join(' '):'<span class="days-empty">—</span>')+'</td><td>'+esc(r.log?date(saved(r.log)):'—')+'</td></tr>';
+          }).join('')+'</tbody></table></div>'+
+          '<div class="timeline-legend"><span><i class="timeline-dot draft"></i> Rascunho</span><span><i class="timeline-dot done"></i> Concluído</span><span><i class="timeline-dot print"></i> Impresso</span></div>'+
+          '</div></td></tr>';
       }
-      return '<tr class="regional-row '+(isOpen?'open':'')+'" data-region-toggle="'+esc(x.regional)+'"><td>'+esc(x.ggl)+'</td><td><span class="arrow">'+(isOpen?'−':'+')+'</span><span class="regional-name">'+esc(x.regional)+'</span></td><td class="num">'+x.total+'</td><td class="responded">'+x.responded+'</td><td class="pending">'+x.pending+'</td><td><strong class="rate '+rateClass(vr)+'">'+vr+'%</strong></td><td><span class="badge '+cls+'">'+statusText+'</span></td></tr>'+detail;
+      return '<tr class="regional-row '+(isOpen?'open':'')+'" data-region-toggle="'+esc(x.regional)+'"><td>'+esc(x.ggl)+'</td><td><span class="arrow">'+(isOpen?'−':'+')+'</span><span class="regional-name">'+esc(x.regional)+'</span></td><td class="num">'+x.total+'</td><td class="timeline-cell draft">'+x.draft+'</td><td class="timeline-cell done">'+x.concluded+'</td><td class="timeline-cell print">'+x.printed+'</td><td><strong class="participation-cell '+rateClass(vr)+'">'+vr+'%</strong></td></tr>'+detail;
     }).join('');
-
-    const totalRow = '<tr class="coverage-total-row"><td><strong>—</strong></td><td><strong>TOTAL</strong></td><td class="num"><strong>'+total+'</strong></td><td class="responded"><strong>'+responded+'</strong></td><td class="pending"><strong>'+pending+'</strong></td><td><strong class="rate '+rateClass(rate)+'">'+rate+'%</strong></td><td><span class="badge '+(pending===0?'ok':responded===0?'red':'warn')+'">'+(pending===0?'Concluída':responded===0?'Nenhuma resposta':'Acompanhamento')+'</span></td></tr>';
-
+    const totalRow='<tr class="coverage-total-row"><td>—</td><td>TOTAL</td><td class="num">'+total+'</td><td class="timeline-cell draft">'+draft+'</td><td class="timeline-cell done">'+concluded+'</td><td class="timeline-cell print">'+printed+'</td><td><strong class="participation-cell '+rateClass(rate)+'">'+rate+'%</strong></td></tr>';
     const storeRowsAll=visible.flatMap(x=>x.rows);
     const sortedStoreRows=sortRows(storeRowsAll,coverageStoreSort.key,coverageStoreSort.dir);
     const storeTable=sortedStoreRows.map(r=>{
       const days=scaledDays(r.log);
-      return '<tr class="drill-store-row"><td>'+esc(r.ggl)+'</td><td>'+esc(r.regional)+'</td><td class="mono">'+esc(r.cod)+'</td><td><strong>'+esc(r.loja)+'</strong></td><td class="bit">'+(r.responded?'1':'0')+'</td><td><span class="response-badge '+(r.responded?'yes':'no')+'">'+(r.responded?'● Respondeu':'● Não respondeu')+'</span></td><td>'+(days.length?days.map(d=>'<span class="days-pill">'+esc(d)+'</span>').join(' '):'<span class="days-empty">—</span>')+'</td><td>'+esc(r.responded?date(saved(r.log)):'—')+'</td></tr>';
+      const flow='<div class="status-flow"><span class="step '+(r.draft?'on draft':'off')+'">● Rascunho</span><span class="status-arrow">→</span><span class="step '+(r.concluded?'on done':'off')+'">● Concluído</span><span class="status-arrow">→</span><span class="step '+(r.printed?'on print':'off')+'">● Impresso</span></div>';
+      return '<tr class="drill-store-row"><td>'+esc(r.ggl)+'</td><td>'+esc(r.regional)+'</td><td class="mono">'+esc(r.cod)+'</td><td><strong>'+esc(r.loja)+'</strong></td><td>'+flow+'</td><td><span class="response-badge '+(r.concluded?'yes':'no')+'">'+(r.concluded?'● Concluído':'● Não concluído')+'</span></td><td><span class="response-badge '+(r.printed?'yes':'no')+'">'+(r.printed?'● Impresso':'● Não impresso')+'</span></td><td>'+(days.length?days.map(d=>'<span class="days-pill">'+esc(d)+'</span>').join(' '):'<span class="days-empty">—</span>')+'</td></tr>';
     }).join('');
-
-    const drillHeader=coverageLevel==='regional'
-      ? '<button class="drill-btn" id="drillDown" title="Ir para o nível de lojas"><span class="drill-arrow">↓</span> Lojas</button>'
-      : '<button class="drill-btn active" id="drillUp" title="Voltar para Regionais"><span class="drill-arrow">↑</span> Regionais</button>';
-    const tableTitle=coverageLevel==='regional'?'Acompanhamento por Regional':'Acompanhamento por Loja';
-    const tableSubtitle=coverageLevel==='regional'?visible.length+' regional(is) · '+total+' loja(s) na visualização':total+' loja(s) · '+responded+' responderam · '+pending+' pendentes';
-    const tableBody=coverageLevel==='regional'?(summaryRows ? summaryRows+totalRow : '<tr><td colspan="7" class="note">Nenhuma loja encontrada para os filtros.</td></tr>'):(storeTable||'<tr><td colspan="8" class="note">Nenhuma loja encontrada para os filtros.</td></tr>');
+    const drillHeader=coverageLevel==='regional'?'<button class="drill-btn" id="drillDown" title="Ir para o nível de lojas"><span class="drill-arrow">↓</span> Lojas</button>':'<button class="drill-btn active" id="drillUp" title="Voltar para Regionais"><span class="drill-arrow">↑</span> Regionais</button>';
+    const tableTitle=coverageLevel==='regional'?'Linha do tempo por Regional':'Linha do tempo por Loja';
+    const tableSubtitle=coverageLevel==='regional'?visible.length+' regional(is) · '+total+' loja(s) na visualização':total+' loja(s) · '+concluded+' concluídas · '+(total-concluded)+' não concluídas';
+    const tableBody=coverageLevel==='regional'?(summaryRows?summaryRows+totalRow:'<tr><td colspan="7" class="note">Nenhuma loja encontrada para os filtros.</td></tr>'):(storeTable||'<tr><td colspan="8" class="note">Nenhuma loja encontrada para os filtros.</td></tr>');
     const tableHead=coverageLevel==='regional'
-      ? '<tr><th data-sort="ggl">'+sortHeader('GGL','ggl',coverageSort)+'</th><th data-sort="regional">'+sortHeader('Regional','regional',coverageSort)+'</th><th data-sort="total">'+sortHeader('Total lojas','total',coverageSort)+'</th><th data-sort="responded">'+sortHeader('Responderam','responded',coverageSort)+'</th><th data-sort="pending">'+sortHeader('Não responderam','pending',coverageSort)+'</th><th data-sort="coverage">'+sortHeader('Participação','coverage',coverageSort)+'</th><th data-sort="status">'+sortHeader('Status','status',coverageSort)+'</th></tr>'
-      : '<tr><th data-store-sort="ggl">GGL '+sortHeader('','ggl',coverageStoreSort)+'</th><th data-store-sort="regional">REGIONAL '+sortHeader('','regional',coverageStoreSort)+'</th><th data-store-sort="cod">COD '+sortHeader('','cod',coverageStoreSort)+'</th><th data-store-sort="loja">LOJA '+sortHeader('','loja',coverageStoreSort)+'</th><th data-store-sort="responded">1 / 0 '+sortHeader('','responded',coverageStoreSort)+'</th><th data-store-sort="status">STATUS '+sortHeader('','status',coverageStoreSort)+'</th><th data-store-sort="days">DIAS ESCALADOS '+sortHeader('','days',coverageStoreSort)+'</th><th data-store-sort="saved">ÚLTIMA RESPOSTA '+sortHeader('','saved',coverageStoreSort)+'</th></tr>';
-
-    const concluded=visible.filter(x=>x.rows.length && x.rows.every(r=>r.responded)).length;
-
-    return '<div class="coverage-hero"><h2>Análise Regional</h2><p>Visão executiva das respostas das 470 lojas. O cruzamento usa o <strong>código numérico do loja_key</strong> do banco com a coluna <strong>COD</strong> da relação oficial. Ex.: <strong>0289 - Itapevi Sp</strong> vira <strong>289</strong>. <strong>1 = respondeu</strong> · <strong>0 = não respondeu</strong>. Use o botão de nível para alternar entre Regionais e Lojas.</p></div>'+
-      '<div class="coverage-kpis"><div class="coverage-kpi"><div class="ck-label">Lojas na visualização</div><div class="ck-value">'+total+'</div><div class="ck-sub">'+(coverageRegional?'Regional selecionada':'base oficial')+'</div></div><div class="coverage-kpi"><div class="ck-label">Responderam</div><div class="ck-value good-text">'+responded+'</div><div class="ck-sub">1</div></div><div class="coverage-kpi"><div class="ck-label">Não responderam</div><div class="ck-value red-text">'+pending+'</div><div class="ck-sub">0</div></div><div class="coverage-kpi"><div class="ck-label">Participação</div><div class="ck-value">'+rate+'%</div><div class="ck-sub">lojas com resposta</div></div><div class="coverage-kpi"><div class="ck-label">Regionais</div><div class="ck-value">'+visible.length+'</div><div class="ck-sub">'+concluded+' concluída(s)</div></div></div>'+
+      ? '<tr><th data-sort="ggl">'+sortHeader('GGL','ggl',coverageSort)+'</th><th data-sort="regional">'+sortHeader('REGIONAL','regional',coverageSort)+'</th><th data-sort="total">'+sortHeader('TOTAL DE LOJAS','total',coverageSort)+'</th><th data-sort="draft">'+sortHeader('RASCUNHO','draft',coverageSort)+'</th><th data-sort="concluded">'+sortHeader('CONCLUÍDO','concluded',coverageSort)+'</th><th data-sort="printed">'+sortHeader('IMPRESSO','printed',coverageSort)+'</th><th data-sort="coverage">'+sortHeader('PARTICIPAÇÃO','coverage',coverageSort)+'</th></tr>'
+      : '<tr><th>GGL</th><th>REGIONAL</th><th>COD</th><th>LOJA</th><th>LINHA DO TEMPO</th><th>CONCLUSÃO</th><th>IMPRESSÃO</th><th>DIAS ESCALADOS</th></tr>';
+    return '<div class="coverage-hero"><h2>Análise Regional</h2><p>Visão executiva da evolução das lojas. A linha do tempo mostra <strong>Rascunho → Concluído → Impresso</strong>. <strong>Concluído</strong> = escala de segunda a domingo + pelo menos uma impressão na semana. <strong>Participação</strong> = lojas concluídas ÷ total de lojas.</p></div>'+
+      '<div class="coverage-kpis"><div class="coverage-kpi"><div class="ck-label">Lojas na visualização</div><div class="ck-value">'+total+'</div><div class="ck-sub">'+(coverageRegional?'Regional selecionada':'base oficial')+'</div></div><div class="coverage-kpi"><div class="ck-label">Rascunho</div><div class="ck-value">'+draft+'</div><div class="ck-sub">escala em edição</div></div><div class="coverage-kpi"><div class="ck-label">Concluídas</div><div class="ck-value good-text">'+concluded+'</div><div class="ck-sub">status finalizado</div></div><div class="coverage-kpi"><div class="ck-label">Impressas</div><div class="ck-value">'+printed+'</div><div class="ck-sub">registro de impressão</div></div><div class="coverage-kpi"><div class="ck-label">Participação</div><div class="ck-value">'+rate+'%</div><div class="ck-sub">lojas concluídas</div></div></div>'+
       '<div class="date-slicer"><div class="date-slicer-title">Período da resposta</div><div class="date-range-field"><label>Data inicial</label><input type="date" id="coverageStartDate" value="'+esc(coverageStartDate)+'"></div><div class="date-range-separator">até</div><div class="date-range-field"><label>Data final</label><input type="date" id="coverageEndDate" value="'+esc(coverageEndDate)+'"></div><button class="btn date-clear" id="clearCoverageDate">Limpar período</button></div>'+
-      '<div class="toolbar coverage-toolbar"><div class="field search"><label>Buscar loja, código ou Regional</label><input id="coverageSearch" value="'+esc(coverageSearch)+'" placeholder="Ex.: 289, Itapevi, RICARDO..."></div><div class="field"><label>Regional</label><select id="coverageRegional"><option value="">Todas</option>'+regionalOptions+'</select></div><div class="field"><label>Resposta</label><select id="coverageStatus"><option value="">Todas</option><option value="responded" '+(coverageStatus==='responded'?'selected':'')+'>Responderam (1)</option><option value="pending" '+(coverageStatus==='pending'?'selected':'')+'>Não responderam (0)</option></select></div><div class="coverage-actions"><button class="btn yellow" id="exportCoverage">↓ Exportar Excel</button><button class="btn" id="clearCoverage">Limpar filtros</button></div></div>'+
-      '<div class="card"><div class="card-head"><div><h2>'+tableTitle+'</h2><span>'+tableSubtitle+'</span></div><div class="drill-summary"><span class="drill-breadcrumb">Nível: <b>'+ (coverageLevel==='regional'?'Regional':'Loja') +'</b></span>'+drillHeader+'<span class="level-help">Clique no cabeçalho para classificar ↕</span></div></div><div class="table-wrap"><table class="'+(coverageLevel==='regional'?'coverage-summary':'coverage-summary drill-table')+'"><thead>'+tableHead+'</thead><tbody>'+tableBody+'</tbody></table></div><div class="coverage-note">'+(coverageLevel==='regional'?'Clique no <strong>+</strong> para expandir uma Regional. O botão <strong>↓ Lojas</strong> funciona como o drill down do Power BI e troca toda a tabela para o nível de loja.':'Você está no nível <strong>Lojas</strong>. Use <strong>↑ Regionais</strong> para voltar. O <strong>1</strong> representa resposta encontrada no banco e <strong>0</strong> ausência de resposta.')+'</div></div>';
+      '<div class="toolbar coverage-toolbar"><div class="field search"><label>Buscar loja, código ou Regional</label><input id="coverageSearch" value="'+esc(coverageSearch)+'" placeholder="Ex.: 289, Itapevi, RICARDO..."></div><div class="field"><label>Regional</label><select id="coverageRegional"><option value="">Todas</option>'+regionalOptions+'</select></div><div class="field"><label>Status</label><select id="coverageStatus"><option value="">Todos</option><option value="draft" '+(coverageStatus==='draft'?'selected':'')+'>Rascunho</option><option value="concluded" '+(coverageStatus==='concluded'?'selected':'')+'>Concluído</option><option value="printed" '+(coverageStatus==='printed'?'selected':'')+'>Impresso</option><option value="not_concluded" '+(coverageStatus==='not_concluded'?'selected':'')+'>Não concluído</option></select></div><div class="coverage-actions"><button class="btn yellow" id="exportCoverage">↓ Exportar Excel</button><button class="btn" id="clearCoverage">Limpar filtros</button></div></div>'+
+      '<div class="card"><div class="card-head"><div><h2>'+tableTitle+'</h2><span>'+tableSubtitle+'</span></div><div class="drill-summary"><span class="drill-breadcrumb">Nível: <b>'+ (coverageLevel==='regional'?'Regional':'Loja') +'</b></span>'+drillHeader+'<span class="level-help">Clique no cabeçalho para classificar ↕</span></div></div><div class="table-wrap"><table class="'+(coverageLevel==='regional'?'coverage-summary':'coverage-summary drill-table')+'"><thead>'+tableHead+'</thead><tbody>'+tableBody+'</tbody></table></div><div class="coverage-note">'+(coverageLevel==='regional'?'Clique no <strong>+</strong> para expandir uma Regional e ver a linha do tempo por loja. A <strong>Participação</strong> é Concluído ÷ Total de lojas.':'Você está no nível <strong>Lojas</strong>. Use <strong>↑ Regionais</strong> para voltar e acompanhe Rascunho → Concluído → Impresso por loja.')+'</div></div>'+dynamicReport();
+  }
+
+  function matrixDimensionOptions(){
+    return {
+      row:'<option value="ggl" '+(matrixRow==='ggl'?'selected':'')+'>GGL</option><option value="regional" '+(matrixRow==='regional'?'selected':'')+'>Regional</option><option value="loja" '+(matrixRow==='loja'?'selected':'')+'>Loja</option>',
+      col:'<option value="status" '+(matrixCol==='status'?'selected':'')+'>Status da escala</option><option value="impressao" '+(matrixCol==='impressao'?'selected':'')+'>Impressão</option><option value="dia" '+(matrixCol==='dia'?'selected':'')+'>Dia da semana</option>'
+    };
+  }
+  function matrixRows(){
+    return coverageRows().filter(r=>{
+      if(!coverageRegional)return true;
+      return r.regional===coverageRegional;
+    }).filter(r=>{
+      const q=normText(coverageSearch);
+      return !q||normText(r.loja+' '+r.cod+' '+r.regional+' '+r.ggl).includes(q);
+    });
+  }
+  function matrixLabels(r){
+    if(matrixCol==='status')return ['Não concluído','Rascunho','Concluído'];
+    if(matrixCol==='impressao')return ['Não impresso','Impresso'];
+    return ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+  }
+  function matrixRowLabel(r){
+    if(matrixRow==='ggl')return String(r.ggl||'—');
+    if(matrixRow==='regional')return String(r.regional||'—');
+    return String(r.cod||'—')+' · '+String(r.loja||'—');
+  }
+  function matrixValueFor(r,label){
+    const st=scaleStatus(r.log);
+    if(matrixCol==='status')return st===label?1:0;
+    if(matrixCol==='impressao')return (weekPrintInfo(r.log).printed?'Impresso':'Não impresso')===label?1:0;
+    const days=scaledDays(r.log).map(x=>normText(x));
+    return days.includes(normText(label))?1:0;
+  }
+  function dynamicReport(){
+    const rows=matrixRows(), labels=matrixLabels(rows[0]||{}), groups={};
+    rows.forEach(r=>{
+      const key=matrixRowLabel(r);
+      if(!groups[key])groups[key]={label:key,count:0,values:Object.fromEntries(labels.map(x=>[x,0]))};
+      groups[key].count++;
+      labels.forEach(label=>groups[key].values[label]+=matrixValueFor(r,label));
+    });
+    const entries=Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR',{numeric:true,sensitivity:'base'}));
+    const totals=Object.fromEntries(labels.map(x=>[x,0])); entries.forEach(g=>labels.forEach(x=>totals[x]+=g.values[x]));
+    const opts=matrixDimensionOptions();
+    const body=entries.length?entries.map(g=>'<tr><td>'+esc(g.label)+'</td><td>'+g.count+'</td>'+labels.map(label=>'<td class="matrix-cell '+(g.values[label]?'yes':'no')+'">'+g.values[label]+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+(labels.length+2)+'" class="dynamic-empty">Nenhum registro encontrado para os filtros atuais.</td></tr>';
+    return '<div class="card dynamic-report"><div class="card-head"><div><h2>▦ Relatório dinâmico</h2><span>Monte a visão que você precisa para cobrança</span></div><span class="metric-pill">'+rows.length+' lojas</span></div><div class="detail"><div class="dynamic-toolbar"><div class="field"><label>Linhas</label><select id="matrixRow"><option value="ggl" '+(matrixRow==='ggl'?'selected':'')+'>GGL</option><option value="regional" '+(matrixRow==='regional'?'selected':'')+'>Regional</option><option value="loja" '+(matrixRow==='loja'?'selected':'')+'>Loja</option></select></div><div class="field"><label>Colunas</label><select id="matrixCol"><option value="status" '+(matrixCol==='status'?'selected':'')+'>Status da escala</option><option value="impressao" '+(matrixCol==='impressao'?'selected':'')+'>Impressão</option><option value="dia" '+(matrixCol==='dia'?'selected':'')+'>Dia da semana</option></select></div><div class="field"><label>Mostrar</label><select id="matrixValue"><option value="quantidade" selected>Quantidade de lojas</option></select></div><div class="dynamic-actions"><button class="btn yellow" id="matrixExport">↓ Exportar visão</button></div></div><div class="dynamic-help">Exemplo: selecione <strong>Loja</strong> nas linhas e <strong>Status da escala</strong> nas colunas para visualizar cada loja distribuída entre <strong>Não concluído / Rascunho / Concluído</strong>.</div></div><div class="table-wrap"><table class="dynamic-table"><thead><tr><th>'+esc(matrixRow==='ggl'?'GGL':matrixRow==='regional'?'REGIONAL':'LOJA')+'</th><th>TOTAL</th>'+labels.map(x=>'<th>'+esc(x.toUpperCase())+'</th>').join('')+'</tr></thead><tbody>'+body+'</tbody><tfoot><tr class="matrix-total"><td>TOTAL</td><td>'+rows.length+'</td>'+labels.map(x=>'<td>'+totals[x]+'</td>').join('')+'</tr></tfoot></table></div></div></div>';
+  }
+  function exportMatrixExcel(){
+    if(typeof XLSX==='undefined'){alert('A biblioteca de exportação do Excel não foi carregada.');return;}
+    const rows=matrixRows(), labels=matrixLabels(rows[0]||{}), groups={};
+    rows.forEach(r=>{const key=matrixRowLabel(r);if(!groups[key])groups[key]={label:key,count:0,values:Object.fromEntries(labels.map(x=>[x,0]))};groups[key].count++;labels.forEach(label=>groups[key].values[label]+=matrixValueFor(r,label));});
+    const out=Object.values(groups).map(g=>{const o={LINHA:g.label,TOTAL:g.count};labels.forEach(x=>o[x.toUpperCase()]=g.values[x]);return o;});
+    const wb=XLSX.utils.book_new(), ws=XLSX.utils.json_to_sheet(out);XLSX.utils.book_append_sheet(wb,ws,'RELATORIO_DINAMICO');XLSX.writeFile(wb,'Relatorio_Dinamico_Escala_DDV_'+new Date().toISOString().slice(0,10)+'.xlsx');
   }
 
   function exportCoverageExcel(){
-    const rows=filteredCoverageRegionalRows().flatMap(x=>x.rows), regions=filteredCoverageRegionalRows().map(x=>({...x,total:x.rows.length,responded:x.rows.filter(r=>r.responded).length,pending:x.rows.filter(r=>!r.responded).length}));
+    const rows=filteredCoverageRegionalRows().flatMap(x=>x.rows), regions=filteredCoverageRegionalRows().map(x=>({...x,total:x.rows.length,draft:x.rows.filter(r=>r.draft).length,concluded:x.rows.filter(r=>r.concluded).length,printed:x.rows.filter(r=>r.printed).length}));
     if(typeof XLSX==='undefined'){alert('A biblioteca de exportação do Excel não foi carregada. Verifique a conexão com a internet e tente novamente.');return;}
     const now=new Date(), stamp=now.toLocaleString('pt-BR');
-    const summary=regions.map(x=>({
-      REGIONAL:x.regional,GGL:x.ggl,TOTAL_LOJAS:x.total,RESPONDERAM:x.responded,
-      NAO_RESPONDERAM:x.pending,PARTICIPACAO_PERCENTUAL:coverageRate(x)/100,
-      STATUS:coverageStatusLabel(x)
-    }));
-    const detailRows=rows.map(r=>({
-      GGL:r.ggl,REGIONAL:r.regional,COD_LOJA:r.cod,LOJA:r.loja,
-      RESPONDEU:r.responded?1:0,STATUS:r.responded?'Respondeu':'Não respondeu',
-      DIAS_ESCALADOS:r.responded?scaledDays(r.log).join(', '):'',
-      ULTIMA_RESPOSTA:r.responded?(saved(r.log)||''):'',
-      ID_REGISTRO:r.responded?(r.log.id||''):'',
-      ORIGEM:r.responded?(payload(r.log).trigger||r.log.trigger||''):''
-    }));
-    const wb=XLSX.utils.book_new();
-    const ws1=XLSX.utils.json_to_sheet(summary), ws2=XLSX.utils.json_to_sheet(detailRows);
-    const ws3=XLSX.utils.aoa_to_sheet([
-      ['RELATÓRIO DE ANÁLISE REGIONAL'],
-      ['Gerado em',stamp],
-      ['Regra','1 = existe registro da loja no banco | 0 = não existe registro'],
-      ['Cruzamento','Código da coluna loja_key do banco, removendo zeros à esquerda, com COD da relação oficial'],
-      ['Dias escalados','Dias em que pelo menos um colaborador possui escalar = SIM na escala registrada'],
-      ['Total de lojas',rows.length],
-      ['Responderam',rows.filter(r=>r.responded).length],
-      ['Não responderam',rows.filter(r=>!r.responded).length]
-    ]);
-    ws1['!cols']=[{wch:18},{wch:8},{wch:13},{wch:13},{wch:17},{wch:20},{wch:24}];
-    ws2['!cols']=[{wch:8},{wch:16},{wch:12},{wch:32},{wch:12},{wch:18},{wch:30},{wch:22},{wch:18},{wch:18}];
-    ws3['!cols']=[{wch:28},{wch:85}];
-    summary.forEach((r,i)=>{const cell=ws1['F'+(i+2)];if(cell)cell.z='0.0%';});
-    XLSX.utils.book_append_sheet(wb,ws1,'RESUMO_REGIONAL');
-    XLSX.utils.book_append_sheet(wb,ws2,'LOJAS');
-    XLSX.utils.book_append_sheet(wb,ws3,'LEIA-ME');
+    const summary=regions.map(x=>({GGL:x.ggl,REGIONAL:x.regional,TOTAL_LOJAS:x.total,RASCUNHO:x.draft,CONCLUIDO:x.concluded,IMPRESSO:x.printed,PARTICIPACAO_PERCENTUAL:coverageRate(x)/100}));
+    const detailRows=rows.map(r=>({GGL:r.ggl,REGIONAL:r.regional,COD_LOJA:r.cod,LOJA:r.loja,RASCUNHO:r.draft?1:0,CONCLUIDO:r.concluded?1:0,IMPRESSO:r.printed?1:0,STATUS:r.concluded?'Concluído':r.draft?'Rascunho':'Não concluído',DIAS_ESCALADOS:r.log?scaledDays(r.log).join(', '):'',ULTIMA_ATUALIZACAO:r.log?(saved(r.log)||''):'',ID_REGISTRO:r.log?(r.log.id||''):'',ORIGEM:r.log?(payload(r.log).trigger||r.log.trigger||''):''}));
+    const wb=XLSX.utils.book_new(), ws1=XLSX.utils.json_to_sheet(summary), ws2=XLSX.utils.json_to_sheet(detailRows);
+    const ws3=XLSX.utils.aoa_to_sheet([['RELATÓRIO DE ANÁLISE REGIONAL'],['Gerado em',stamp],['Linha do tempo','Rascunho → Concluído → Impresso'],['Participação','Percentual de lojas com status Concluído sobre o total de lojas'],['Rascunho','Loja com registro de escala, mas ainda sem cumprir todos os critérios de conclusão'],['Concluído','Escala de segunda a domingo e pelo menos uma impressão na mesma semana'],['Impresso','Existe registro de impressão para a mesma loja e semana']]);
+    ws1['!cols']=[{wch:8},{wch:18},{wch:13},{wch:12},{wch:13},{wch:12},{wch:20}]; ws2['!cols']=[{wch:8},{wch:16},{wch:12},{wch:32},{wch:11},{wch:12},{wch:11},{wch:18},{wch:30},{wch:22},{wch:18},{wch:18}]; ws3['!cols']=[{wch:28},{wch:85}];
+    summary.forEach((r,i)=>{const cell=ws1['G'+(i+2)];if(cell)cell.z='0.0%';});
+    XLSX.utils.book_append_sheet(wb,ws1,'RESUMO_REGIONAL'); XLSX.utils.book_append_sheet(wb,ws2,'LOJAS'); XLSX.utils.book_append_sheet(wb,ws3,'LEIA-ME');
     XLSX.writeFile(wb,'Analise_Regional_Escala_DDV_'+now.toISOString().slice(0,10)+'.xlsx');
   }
 
@@ -636,6 +695,10 @@ function bind(){
   const cr=$('coverageRegional');if(cr)cr.onchange=()=>{coverageRegional=cr.value;coverageOpen=cr.value?new Set(['reg_'+cr.value]):new Set();render()};
   const cs=$('coverageStatus');if(cs)cs.onchange=()=>{coverageStatus=cs.value;render()};
   const csearch=$('coverageSearch');if(csearch)csearch.oninput=()=>{coverageSearch=csearch.value;render()};
+  const mr=$('matrixRow');if(mr)mr.onchange=()=>{matrixRow=mr.value;render()};
+  const mc=$('matrixCol');if(mc)mc.onchange=()=>{matrixCol=mc.value;render()};
+  const mv=$('matrixValue');if(mv)mv.onchange=()=>{matrixValue=mv.value;render()};
+  const me=$('matrixExport');if(me)me.onclick=exportMatrixExcel;
   const ce=$('exportCoverage');if(ce)ce.onclick=exportCoverageExcel;
   const cc=$('clearCoverage');if(cc)cc.onclick=()=>{coverageRegional='';coverageStatus='';coverageSearch='';coverageStartDate='';coverageEndDate='';coverageOpen=new Set();render()};
   const dd=$('drillDown');if(dd)dd.onclick=()=>{coverageLevel='stores';coverageOpen=new Set();render()};
