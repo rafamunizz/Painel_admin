@@ -207,7 +207,10 @@ function weekPrintInfo(log){
 function hasFullWeekSchedule(log){
   if(!log)return false;
   const sched=schedule(log)||{};
-  return DAYS.every(d=>Object.values(sched[d]||{}).some(en=>en && en.escalar==='SIM'));
+  // Para CONCLUÍDO, a loja precisa ter escala de segunda a sábado.
+  // Domingo não participa da regra de conclusão.
+  const requiredDays=['SEGUNDA-FEIRA','TERÇA-FEIRA','QUARTA-FEIRA','QUINTA-FEIRA','SEXTA-FEIRA','SÁBADO'];
+  return requiredDays.every(d=>Object.values(sched[d]||{}).some(en=>en && en.escalar==='SIM'));
 }
 function isScaleConcluded(log){
   return !!log && hasFullWeekSchedule(log) && weekPrintInfo(log).printed;
@@ -664,7 +667,7 @@ function analytics(){
     const summary=regions.map(x=>({GGL:x.ggl,REGIONAL:x.regional,TOTAL_LOJAS:x.total,RASCUNHO:x.draft,CONCLUIDO:x.concluded,IMPRESSO:x.printed,PARTICIPACAO_PERCENTUAL:coverageRate(x)/100}));
     const detailRows=rows.map(r=>({GGL:r.ggl,REGIONAL:r.regional,COD_LOJA:r.cod,LOJA:r.loja,RASCUNHO:r.draft?1:0,CONCLUIDO:r.concluded?1:0,IMPRESSO:r.printed?1:0,STATUS:r.concluded?'Concluído':r.draft?'Rascunho':'Não concluído',DIAS_ESCALADOS:r.log?scaledDays(r.log).join(', '):'',ULTIMA_ATUALIZACAO:r.log?(saved(r.log)||''):'',ID_REGISTRO:r.log?(r.log.id||''):'',ORIGEM:r.log?(payload(r.log).trigger||r.log.trigger||''):''}));
     const wb=XLSX.utils.book_new(), ws1=XLSX.utils.json_to_sheet(summary), ws2=XLSX.utils.json_to_sheet(detailRows);
-    const ws3=XLSX.utils.aoa_to_sheet([['RELATÓRIO DE ANÁLISE REGIONAL'],['Gerado em',stamp],['Linha do tempo','Rascunho → Concluído → Impresso'],['Participação','Percentual de lojas com status Concluído sobre o total de lojas'],['Rascunho','Loja com registro de escala, mas ainda sem cumprir todos os critérios de conclusão'],['Concluído','Escala de segunda a domingo e pelo menos uma impressão na mesma semana'],['Impresso','Existe registro de impressão para a mesma loja e semana']]);
+    const ws3=XLSX.utils.aoa_to_sheet([['RELATÓRIO DE ANÁLISE REGIONAL'],['Gerado em',stamp],['Linha do tempo','Rascunho → Concluído → Impresso'],['Participação','Percentual de lojas com status Concluído sobre o total de lojas'],['Rascunho','Loja com registro de escala, mas ainda sem cumprir todos os critérios de conclusão'],['Concluído','Escala de segunda a sábado e pelo menos uma impressão na mesma semana'],['Impresso','Existe registro de impressão para a mesma loja e semana']]);
     ws1['!cols']=[{wch:8},{wch:18},{wch:13},{wch:12},{wch:13},{wch:12},{wch:20}]; ws2['!cols']=[{wch:8},{wch:16},{wch:12},{wch:32},{wch:11},{wch:12},{wch:11},{wch:18},{wch:30},{wch:22},{wch:18},{wch:18}]; ws3['!cols']=[{wch:28},{wch:85}];
     summary.forEach((r,i)=>{const cell=ws1['G'+(i+2)];if(cell)cell.z='0.0%';});
     XLSX.utils.book_append_sheet(wb,ws1,'RESUMO_REGIONAL'); XLSX.utils.book_append_sheet(wb,ws2,'LOJAS'); XLSX.utils.book_append_sheet(wb,ws3,'LEIA-ME');
